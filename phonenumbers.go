@@ -3335,11 +3335,11 @@ func GetTimezonesForNumber(number *PhoneNumber) ([]string, error) {
 	return GetTimezonesForPrefix(e164)
 }
 
-func getValueForNumber(onceMap map[string]*sync.Once, langMap map[string]*intStringMap, binMap map[string]string, language string, maxLength int, number *PhoneNumber) (string, error) {
+func getValueForNumber(onceMap map[string]*sync.Once, langMap map[string]*intStringMap, binMap map[string]string, language string, maxLength int, number *PhoneNumber) (string, int, error) {
 	// do we have data for this language
 	_, existing := binMap[language]
 	if !existing {
-		return "", nil
+		return "", 0, nil
 	}
 
 	// load it into our map
@@ -3353,7 +3353,7 @@ func getValueForNumber(onceMap map[string]*sync.Once, langMap map[string]*intStr
 	// do we have a map for this language?
 	prefixMap, ok := langMap[language]
 	if !ok {
-		return "", fmt.Errorf("error loading language map for %s", language)
+		return "", 0, fmt.Errorf("error loading language map for %s", language)
 	}
 
 	e164 := Format(number, E164)
@@ -3365,24 +3365,24 @@ func getValueForNumber(onceMap map[string]*sync.Once, langMap map[string]*intStr
 	for i := maxLength; i > 1; i-- {
 		index, err := strconv.Atoi(e164[0:i])
 		if err != nil {
-			return "", err
+			return "", 0, err
 		}
 		if value, has := prefixMap.Map[index]; has {
-			return value, nil
+			return value, index, nil
 		}
 	}
-	return "", nil
+	return "", 0, nil
 }
 
 // GetCarrierForNumber returns the carrier we believe the number belongs to. Note due
 // to number porting this is only a guess, there is no guarantee to its accuracy.
-func GetCarrierForNumber(number *PhoneNumber, lang string) (string, error) {
-	carrier, err := getValueForNumber(carrierOnces, carrierPrefixMap, carrierMapData, lang, 10, number)
+func GetCarrierForNumber(number *PhoneNumber, lang string) (string, int, error) {
+	carrier, index, err := getValueForNumber(carrierOnces, carrierPrefixMap, carrierMapData, lang, 10, number)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
-	if carrier != "" {
-		return carrier, nil
+	if carrier != "" && index != 0 {
+		return carrier, index, nil
 	}
 
 	// fallback to english
@@ -3392,7 +3392,7 @@ func GetCarrierForNumber(number *PhoneNumber, lang string) (string, error) {
 // GetGeocodingForNumber returns the location we think the number was first acquired in. This is
 // just our best guess, there is no guarantee to its accuracy.
 func GetGeocodingForNumber(number *PhoneNumber, lang string) (string, error) {
-	geocoding, err := getValueForNumber(geocodingOnces, geocodingPrefixMap, geocodingMapData, lang, 10, number)
+	geocoding, _, err := getValueForNumber(geocodingOnces, geocodingPrefixMap, geocodingMapData, lang, 10, number)
 	if err != nil {
 		return "", err
 	}
@@ -3401,5 +3401,6 @@ func GetGeocodingForNumber(number *PhoneNumber, lang string) (string, error) {
 	}
 
 	// fallback to english
-	return getValueForNumber(geocodingOnces, geocodingPrefixMap, geocodingMapData, "en", 10, number)
+	geocoding, _, err = getValueForNumber(geocodingOnces, geocodingPrefixMap, geocodingMapData, "en", 10, number)
+	return geocoding, err
 }
